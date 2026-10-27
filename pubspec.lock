@@ -227,9 +227,11 @@ packages:
   huntingdogs:
     dependency: "direct main"
     description:
-      path: "../../packages/flutter-sdk"
-      relative: true
-    source: path
+      path: "."
+      ref: HEAD
+      resolved-ref: d67b72c15a8897791b197c9794fccd6da4881ccc
+      url: "https://github.com/huntingdogsai/huntingdogs-flutter.git"
+    source: git
     version: "0.1.0"
   io:
     dependency: transitive
