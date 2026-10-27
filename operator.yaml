@@ -1,0 +1,29 @@
+app:
+  id: foodly-production-demo
+  name: Foodly Production Demo
+  platform: flutter
+
+routing:
+  adapters:
+    - go_router
+
+state:
+  adapters:
+    - bloc
+
+privacy:
+  redact_fields:
+    - password
+    - pin
+    - token
+    - authorization
+    - accessToken
+    - refreshToken
+    - cardNumber
+    - cvv
+
+policy:
+  require_confirmation:
+    - place_order
+    - make_payment
+    - delete_account

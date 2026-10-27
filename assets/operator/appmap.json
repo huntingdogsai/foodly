@@ -1,0 +1,93 @@
+{
+  "appId": "foodly-production-demo",
+  "formatVersion": "operator-appmap/v1",
+  "generatedAt": "2026-06-17T00:00:00.000Z",
+  "platform": "flutter",
+  "root": "examples/flutter-foodly",
+  "routes": [
+    {
+      "id": "route_home",
+      "path": "/",
+      "screen": "Home",
+      "framework": "go_router"
+    },
+    {
+      "id": "route_search",
+      "path": "/search",
+      "screen": "Search",
+      "framework": "go_router"
+    },
+    {
+      "id": "route_checkout",
+      "path": "/checkout",
+      "screen": "Checkout",
+      "framework": "go_router"
+    }
+  ],
+  "stateStores": [
+    {
+      "id": "state_product_search",
+      "name": "ProductSearchState",
+      "source": "bloc",
+      "fields": ["query", "loading", "results", "selected", "quantity", "error"]
+    },
+    {
+      "id": "state_cart",
+      "name": "CartState",
+      "source": "bloc",
+      "fields": ["items", "total", "submitting", "error"]
+    }
+  ],
+  "screens": [
+    {
+      "id": "screen_search",
+      "route": "/search",
+      "visibleSignals": ["Search products", "Quantity", "Add to cart"],
+      "stateStores": ["ProductSearchState", "CartState"],
+      "actions": [
+        {
+          "kind": "type",
+          "role": "input",
+          "label": "Search products",
+          "updates": "ProductSearchState.query"
+        },
+        {
+          "kind": "tap",
+          "role": "listitem",
+          "updates": "ProductSearchState.selected"
+        },
+        {
+          "kind": "type",
+          "role": "input",
+          "label": "Quantity",
+          "updates": "ProductSearchState.quantity"
+        },
+        {
+          "kind": "tap",
+          "role": "button",
+          "label": "Add to cart",
+          "updates": "CartState.items"
+        }
+      ]
+    },
+    {
+      "id": "screen_checkout",
+      "route": "/checkout",
+      "visibleSignals": ["Checkout", "Cart", "Total"],
+      "stateStores": ["CartState"],
+      "policy": {
+        "requiresConfirmation": ["place_order", "make_payment"]
+      }
+    }
+  ],
+  "sensitiveActions": [
+    {
+      "purpose": "place_order",
+      "reason": "Creates an order for the user"
+    },
+    {
+      "purpose": "make_payment",
+      "reason": "Charges or authorizes payment"
+    }
+  ]
+}

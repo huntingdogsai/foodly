@@ -1,0 +1,9 @@
+{
+  "appId": "foodly-production-demo",
+  "appVersion": "1.0.0-demo",
+  "gitSha": "flutter-foodly-demo-sha",
+  "appMapHash": "sha256:4ee0dd59da83b307c02618360ee00a6d7bdd5e5eef57f23fc7beae3585f87ca6",
+  "generatedAt": "2026-06-17T00:00:00.000Z",
+  "formatVersion": "operator-appmap/v1",
+  "platform": "flutter"
+}
