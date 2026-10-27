@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_foodly_operator_demo/main.dart' as foodly;
+import 'package:foodly/main.dart' as foodly;
 import 'package:huntingdogs/huntingdogs.dart';
 
 import 'foodly_test_backend.dart';
