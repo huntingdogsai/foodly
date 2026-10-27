@@ -264,6 +264,10 @@ abstract class FoodlyRepository {
     required FoodlyCheckoutDraft draft,
     required int discount,
   });
+
+  Future<List<FoodlyProduct>> restoreFavourites(String userId);
+
+  Future<void> saveFavourites(String userId, List<FoodlyProduct> favourites);
 }
 
 class FoodlyRestRepository implements FoodlyRepository {
@@ -412,6 +416,19 @@ class FoodlyRestRepository implements FoodlyRepository {
     return order;
   }
 
+  @override
+  Future<List<FoodlyProduct>> restoreFavourites(String userId) async {
+    return _store.readFavourites(userId);
+  }
+
+  @override
+  Future<void> saveFavourites(
+    String userId,
+    List<FoodlyProduct> favourites,
+  ) async {
+    await _store.writeFavourites(userId, favourites);
+  }
+
   Future<FoodlySession?> _currentSession() async {
     final cached = _session;
     if (cached != null) return cached;
@@ -546,6 +563,22 @@ class FoodlyLocalStore {
 
   Future<void> writeCheckoutDraft(FoodlyCheckoutDraft draft) {
     return writeJson('foodly.checkoutDraft', draft.toJson());
+  }
+
+  Future<List<FoodlyProduct>> readFavourites(String userId) async {
+    final text = await _preferences.getString('foodly.favourites.$userId');
+    if (text == null || text.trim().isEmpty) {
+      return const <FoodlyProduct>[];
+    }
+    return _jsonList(_jsonMap(jsonDecode(text))['items'])
+        .map((item) => FoodlyProduct.fromJson(_jsonMap(item)))
+        .toList(growable: false);
+  }
+
+  Future<void> writeFavourites(String userId, List<FoodlyProduct> favourites) {
+    return writeJson('foodly.favourites.$userId', <String, Object?>{
+      'items': favourites.map((product) => product.toJson()).toList(),
+    });
   }
 
   Future<void> writeJson(String key, FoodlyJson value) {

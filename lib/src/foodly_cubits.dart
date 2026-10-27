@@ -181,6 +181,46 @@ class CheckoutState {
       };
 }
 
+class FavouritesState {
+  const FavouritesState({
+    this.userId,
+    this.loading = false,
+    this.items = const <FoodlyProduct>[],
+    this.error,
+  });
+
+  final String? userId;
+  final bool loading;
+  final List<FoodlyProduct> items;
+  final String? error;
+
+  bool get signedIn => userId != null;
+
+  bool contains(String productId) =>
+      items.any((product) => product.id == productId);
+
+  FavouritesState copyWith({
+    bool? loading,
+    List<FoodlyProduct>? items,
+    String? error,
+    bool clearError = false,
+  }) {
+    return FavouritesState(
+      userId: userId,
+      loading: loading ?? this.loading,
+      items: items ?? this.items,
+      error: clearError ? null : error ?? this.error,
+    );
+  }
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'userId': userId,
+        'loading': loading,
+        'items': items.map((product) => product.toJson()).toList(),
+        'error': error,
+      };
+}
+
 class AuthCubit extends Cubit<AuthState> {
   AuthCubit(this.repository) : super(const AuthState());
 
@@ -417,6 +457,64 @@ class CheckoutCubit extends Cubit<CheckoutState> {
         emit(state.copyWith(savingDraft: false, error: error.toString()));
       }
     }
+  }
+}
+
+class FavouritesCubit extends Cubit<FavouritesState> {
+  FavouritesCubit(this.repository) : super(const FavouritesState());
+
+  final FoodlyRepository repository;
+  Future<void>? _restoring;
+
+  Future<void> restore(String? userId) {
+    final restoring = _restore(userId);
+    _restoring = restoring;
+    return restoring;
+  }
+
+  Future<void> _restore(String? userId) async {
+    if (userId == null) {
+      emit(const FavouritesState());
+      return;
+    }
+    emit(FavouritesState(userId: userId, loading: true));
+    try {
+      final items = await repository.restoreFavourites(userId);
+      if (isClosed || state.userId != userId) return;
+      emit(state.copyWith(loading: false, items: items, clearError: true));
+    } catch (error) {
+      if (isClosed || state.userId != userId) return;
+      emit(state.copyWith(loading: false, error: error.toString()));
+    }
+  }
+
+  Future<void> toggle(FoodlyProduct product) async {
+    await _restoring;
+    final userId = state.userId;
+    if (userId == null) return;
+    emit(state.copyWith(
+        items: _toggled(state.items, product), clearError: true));
+    try {
+      await repository.saveFavourites(userId, state.items);
+    } catch (error) {
+      if (isClosed || state.userId != userId) return;
+      emit(state.copyWith(
+        items: _toggled(state.items, product),
+        error: error.toString(),
+      ));
+    }
+  }
+
+  static List<FoodlyProduct> _toggled(
+    List<FoodlyProduct> items,
+    FoodlyProduct product,
+  ) {
+    if (items.any((item) => item.id == product.id)) {
+      return items
+          .where((item) => item.id != product.id)
+          .toList(growable: false);
+    }
+    return List<FoodlyProduct>.unmodifiable(<FoodlyProduct>[...items, product]);
   }
 }
 
