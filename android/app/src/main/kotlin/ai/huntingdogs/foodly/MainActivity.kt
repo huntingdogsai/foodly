@@ -1,4 +1,4 @@
-package ai.operator.demo.flutter_foodly_operator_demo
+package ai.huntingdogs.foodly
 
 import io.flutter.embedding.android.FlutterActivity
 
