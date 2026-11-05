@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:huntingdogs/huntingdogs.dart';
@@ -10,7 +11,9 @@ import 'src/foodly_domain.dart';
 
 const String _foodlyApiBaseUrl = String.fromEnvironment(
   'FOODLY_API_BASE_URL',
-  defaultValue: 'http://127.0.0.1:8787',
+  // A real remote backend, not localhost: a QA run's host-side checkpoint can only see traffic that
+  // leaves the device for a real server, so Foodly must talk to its deployed API over the network.
+  defaultValue: 'https://huntingdogs-foodly-api-snbl7sdvbq-ew.a.run.app',
 );
 const String _operatorEndpoint = String.fromEnvironment('OPERATOR_ENDPOINT');
 const String _operatorSessionId = String.fromEnvironment(
@@ -81,6 +84,7 @@ class _FoodlyProductionAppState extends State<FoodlyProductionApp> {
   late final ProductSearchCubit _searchCubit;
   late final CartCubit _cartCubit;
   late final CheckoutCubit _checkoutCubit;
+  late final FavouritesCubit _favouritesCubit;
   late final FoodlyCoordinator _coordinator;
   late final GoRouter _router;
 
@@ -94,6 +98,7 @@ class _FoodlyProductionAppState extends State<FoodlyProductionApp> {
     _searchCubit = ProductSearchCubit(_repository);
     _cartCubit = CartCubit(_repository);
     _checkoutCubit = CheckoutCubit(_repository);
+    _favouritesCubit = FavouritesCubit(_repository);
     _coordinator = FoodlyCoordinator(
       auth: _authCubit,
       search: _searchCubit,
@@ -112,6 +117,7 @@ class _FoodlyProductionAppState extends State<FoodlyProductionApp> {
     unawaited(_searchCubit.close());
     unawaited(_cartCubit.close());
     unawaited(_checkoutCubit.close());
+    unawaited(_favouritesCubit.close());
     super.dispose();
   }
 
@@ -168,16 +174,24 @@ class _FoodlyProductionAppState extends State<FoodlyProductionApp> {
           BlocProvider<ProductSearchCubit>.value(value: _searchCubit),
           BlocProvider<CartCubit>.value(value: _cartCubit),
           BlocProvider<CheckoutCubit>.value(value: _checkoutCubit),
+          BlocProvider<FavouritesCubit>.value(value: _favouritesCubit),
         ],
-        child: MaterialApp.router(
-          title: 'Foodly',
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xff12664f),
-            ),
-            useMaterial3: true,
+        child: BlocListener<AuthCubit, AuthState>(
+          listenWhen: (previous, current) =>
+              previous.session?.user.id != current.session?.user.id,
+          listener: (context, state) => unawaited(
+            _favouritesCubit.restore(state.session?.user.id),
           ),
-          routerConfig: _router,
+          child: MaterialApp.router(
+            title: 'Foodly',
+            theme: ThemeData(
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: const Color(0xff12664f),
+              ),
+              useMaterial3: true,
+            ),
+            routerConfig: _router,
+          ),
         ),
       ),
     );
@@ -347,7 +361,6 @@ class _HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final searchCubit = context.read<ProductSearchCubit>();
     return BlocBuilder<ProductSearchCubit, ProductSearchState>(
       builder: (context, products) {
         return Column(
@@ -371,6 +384,8 @@ class _HomeScreen extends StatelessWidget {
               },
             ),
             const SizedBox(height: 12),
+            const _FavouritesSection(),
+            const SizedBox(height: 20),
             Text('Products', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             if (products.loading) const LinearProgressIndicator(),
@@ -380,21 +395,104 @@ class _HomeScreen extends StatelessWidget {
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             for (final product in products.results)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(product.name),
-                subtitle: Text('${product.category} · NGN ${product.price}'),
-                trailing: FilledButton(
-                  onPressed: product.inStock
-                      ? () {
-                          context.go('/search');
-                          unawaited(searchCubit.search(product.name));
-                        }
-                      : null,
-                  child: Text(product.inStock ? 'Find' : 'Sold out'),
-                ),
-              ),
+              _ProductTile(product: product),
           ],
+        );
+      },
+    );
+  }
+}
+
+class _FavouritesSection extends StatelessWidget {
+  const _FavouritesSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<FavouritesCubit, FavouritesState>(
+      builder: (context, favourites) {
+        return BlocBuilder<ProductSearchCubit, ProductSearchState>(
+          builder: (context, products) {
+            // A favourite shows as the product is today when the list has it.
+            final current = <String, FoodlyProduct>{
+              for (final product in products.results) product.id: product,
+            };
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text('Favourites',
+                    style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 8),
+                if (favourites.loading) const LinearProgressIndicator(),
+                if (favourites.error != null)
+                  Text(
+                    favourites.error!,
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
+                if (!favourites.signedIn)
+                  const Text('Sign in to keep favourites.')
+                else if (favourites.items.isEmpty)
+                  const Text(
+                      'No favourites yet: tap a heart to keep a product here.')
+                else
+                  for (final product in favourites.items)
+                    _ProductTile(product: current[product.id] ?? product),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _ProductTile extends StatelessWidget {
+  const _ProductTile({required this.product});
+
+  final FoodlyProduct product;
+
+  @override
+  Widget build(BuildContext context) {
+    final searchCubit = context.read<ProductSearchCubit>();
+    return BlocBuilder<FavouritesCubit, FavouritesState>(
+      builder: (context, favourites) {
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading:
+              favourites.signedIn ? _FavouriteButton(product: product) : null,
+          title: Text(product.name),
+          subtitle: Text('${product.category} · NGN ${product.price}'),
+          trailing: FilledButton(
+            onPressed: product.inStock
+                ? () {
+                    context.go('/search');
+                    unawaited(searchCubit.search(product.name));
+                  }
+                : null,
+            child: Text(product.inStock ? 'Find' : 'Sold out'),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _FavouriteButton extends StatelessWidget {
+  const _FavouriteButton({required this.product});
+
+  final FoodlyProduct product;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<FavouritesCubit, FavouritesState>(
+      builder: (context, favourites) {
+        final favourite = favourites.contains(product.id);
+        return IconButton(
+          tooltip: favourite ? 'Remove from favourites' : 'Add to favourites',
+          icon: Icon(favourite ? Icons.favorite : Icons.favorite_border),
+          color: favourite ? Theme.of(context).colorScheme.primary : null,
+          onPressed: () =>
+              unawaited(context.read<FavouritesCubit>().toggle(product)),
         );
       },
     );
@@ -411,6 +509,43 @@ class _SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<_SearchScreen> {
   late final TextEditingController _searchController;
   late final TextEditingController _quantityController;
+
+  /// The phone's microphone, for a spoken note about the order (native recorder in MainActivity.kt).
+  static const MethodChannel _voiceChannel = MethodChannel('foodly/voice');
+  String? _voiceNote;
+  bool _recordingVoiceNote = false;
+
+  /// Records a few seconds from the microphone and shows the shopper that the note was heard.
+  Future<void> _recordVoiceNote() async {
+    setState(() {
+      _recordingVoiceNote = true;
+      _voiceNote = null;
+    });
+    try {
+      final result = await _voiceChannel.invokeMapMethod<String, Object?>(
+        'record',
+        <String, Object?>{'seconds': 3},
+      );
+      final error = result?['error'];
+      final peak = (result?['peak'] as int?) ?? 0;
+      final seconds = ((result?['ms'] as int?) ?? 0) / 1000;
+      setState(() {
+        if (error != null) {
+          _voiceNote = 'Voice note failed: $error';
+        } else if (peak > 500) {
+          _voiceNote =
+              'Voice note saved: ${seconds.toStringAsFixed(1)}s — we heard you (level $peak).';
+        } else {
+          _voiceNote =
+              'Voice note saved: ${seconds.toStringAsFixed(1)}s — but it sounded silent (level $peak).';
+        }
+      });
+    } catch (error) {
+      setState(() => _voiceNote = 'Voice note failed: $error');
+    } finally {
+      if (mounted) setState(() => _recordingVoiceNote = false);
+    }
+  }
 
   @override
   void initState() {
@@ -450,6 +585,21 @@ class _SearchScreenState extends State<_SearchScreen> {
                 context.read<ProductSearchCubit>().search(value),
               ),
             ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _recordingVoiceNote
+                  ? null
+                  : () => unawaited(_recordVoiceNote()),
+              icon: const Icon(Icons.mic),
+              label: Text(
+                _recordingVoiceNote ? 'Listening…' : 'Leave a voice note',
+              ),
+            ),
+            if (_voiceNote != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(_voiceNote!),
+              ),
             const SizedBox(height: 12),
             if (state.loading) const LinearProgressIndicator(),
             for (final product in state.results)

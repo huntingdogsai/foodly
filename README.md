@@ -1,6 +1,7 @@
 # Foodly
 
-A small food-ordering app in Flutter: sign in, browse the menu, add to the basket, check out.
+A small food-ordering app in Flutter: sign in, browse the menu, keep favourites, add to the
+basket, check out.
 It exists so that [huntingdogs](https://github.com/huntingdogsai) has an app to test on every
 pull request: the tests run on a fresh Android emulator and report on the pull request.
 
