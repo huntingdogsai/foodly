@@ -11,7 +11,9 @@ import 'src/foodly_domain.dart';
 
 const String _foodlyApiBaseUrl = String.fromEnvironment(
   'FOODLY_API_BASE_URL',
-  defaultValue: 'http://127.0.0.1:8787',
+  // A real remote backend, not localhost: a QA run's host-side checkpoint can only see traffic that
+  // leaves the device for a real server, so Foodly must talk to its deployed API over the network.
+  defaultValue: 'https://huntingdogs-foodly-api-snbl7sdvbq-ew.a.run.app',
 );
 const String _operatorEndpoint = String.fromEnvironment('OPERATOR_ENDPOINT');
 const String _operatorSessionId = String.fromEnvironment(
