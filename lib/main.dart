@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:huntingdogs/huntingdogs.dart';
@@ -507,6 +508,43 @@ class _SearchScreenState extends State<_SearchScreen> {
   late final TextEditingController _searchController;
   late final TextEditingController _quantityController;
 
+  /// The phone's microphone, for a spoken note about the order (native recorder in MainActivity.kt).
+  static const MethodChannel _voiceChannel = MethodChannel('foodly/voice');
+  String? _voiceNote;
+  bool _recordingVoiceNote = false;
+
+  /// Records a few seconds from the microphone and shows the shopper that the note was heard.
+  Future<void> _recordVoiceNote() async {
+    setState(() {
+      _recordingVoiceNote = true;
+      _voiceNote = null;
+    });
+    try {
+      final result = await _voiceChannel.invokeMapMethod<String, Object?>(
+        'record',
+        <String, Object?>{'seconds': 3},
+      );
+      final error = result?['error'];
+      final peak = (result?['peak'] as int?) ?? 0;
+      final seconds = ((result?['ms'] as int?) ?? 0) / 1000;
+      setState(() {
+        if (error != null) {
+          _voiceNote = 'Voice note failed: $error';
+        } else if (peak > 500) {
+          _voiceNote =
+              'Voice note saved: ${seconds.toStringAsFixed(1)}s — we heard you (level $peak).';
+        } else {
+          _voiceNote =
+              'Voice note saved: ${seconds.toStringAsFixed(1)}s — but it sounded silent (level $peak).';
+        }
+      });
+    } catch (error) {
+      setState(() => _voiceNote = 'Voice note failed: $error');
+    } finally {
+      if (mounted) setState(() => _recordingVoiceNote = false);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -545,6 +583,21 @@ class _SearchScreenState extends State<_SearchScreen> {
                 context.read<ProductSearchCubit>().search(value),
               ),
             ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _recordingVoiceNote
+                  ? null
+                  : () => unawaited(_recordVoiceNote()),
+              icon: const Icon(Icons.mic),
+              label: Text(
+                _recordingVoiceNote ? 'Listening…' : 'Leave a voice note',
+              ),
+            ),
+            if (_voiceNote != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(_voiceNote!),
+              ),
             const SizedBox(height: 12),
             if (state.loading) const LinearProgressIndicator(),
             for (final product in state.results)
